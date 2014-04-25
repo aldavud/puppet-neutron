@@ -16,6 +16,10 @@
 # [*enabled*]
 #   State of the service. Defaults to true.
 #
+# [*manage_service*]
+#   (optional) Whether to start/stop the service
+#   Defaults to true
+#
 # [*debug*]
 #   Debug. Defaults to false.
 #
@@ -29,6 +33,12 @@
 # [*auth_url*]
 #   The URL used to validate tokens. Defaults to 'http://localhost:35357/v2.0'.
 #
+# [*auth_insecure*]
+#   turn off verification of the certificate for ssl (Defaults to false)
+#
+# [*auth_ca_cert*]
+#   CA cert to check against with for ssl keystone. (Defaults to undef)
+#
 # [*auth_region*]
 #   The authentication region. Defaults to 'RegionOne'.
 #
@@ -38,18 +48,30 @@
 # [*metadata_port*]
 #   The TCP port of the metadata service. Defaults to 8775.
 #
+# [*metadata_workers*]
+#   (optional) Number of separate worker processes to spawn.
+#   The default, 0, runs the worker thread in the current process.
+#   Greater than 0 launches that number of child processes as workers.
+#   The parent process manages them. Having more workers will help to improve performances.
+#   Defaults to: 0
+#
+
 class neutron::agents::metadata (
   $auth_password,
   $shared_secret,
-  $package_ensure = 'present',
-  $enabled        = true,
-  $debug          = false,
-  $auth_tenant    = 'services',
-  $auth_user      = 'neutron',
-  $auth_url       = 'http://localhost:35357/v2.0',
-  $auth_region    = 'RegionOne',
-  $metadata_ip    = '127.0.0.1',
-  $metadata_port  = '8775'
+  $package_ensure   = 'present',
+  $enabled          = true,
+  $manage_service   = true,
+  $debug            = false,
+  $auth_tenant      = 'services',
+  $auth_user        = 'neutron',
+  $auth_url         = 'http://localhost:35357/v2.0',
+  $auth_insecure    = false,
+  $auth_ca_cert     = undef,
+  $auth_region      = 'RegionOne',
+  $metadata_ip      = '127.0.0.1',
+  $metadata_port    = '8775',
+  $metadata_workers = '0'
   ) {
 
   include neutron::params
@@ -61,6 +83,7 @@ class neutron::agents::metadata (
   neutron_metadata_agent_config {
     'DEFAULT/debug':                          value => $debug;
     'DEFAULT/auth_url':                       value => $auth_url;
+    'DEFAULT/auth_insecure':                  value => $auth_insecure;
     'DEFAULT/auth_region':                    value => $auth_region;
     'DEFAULT/admin_tenant_name':              value => $auth_tenant;
     'DEFAULT/admin_user':                     value => $auth_user;
@@ -68,6 +91,17 @@ class neutron::agents::metadata (
     'DEFAULT/nova_metadata_ip':               value => $metadata_ip;
     'DEFAULT/nova_metadata_port':             value => $metadata_port;
     'DEFAULT/metadata_proxy_shared_secret':   value => $shared_secret;
+    'DEFAULT/metadata_workers':               value => $metadata_workers;
+  }
+
+  if $auth_ca_cert {
+    neutron_metadata_agent_config {
+      'DEFAULT/auth_ca_cert':                 value => $auth_ca_cert;
+    }
+  } else {
+    neutron_metadata_agent_config {
+      'DEFAULT/auth_ca_cert':                 ensure => absent;
+    }
   }
 
   if $::neutron::params::metadata_agent_package {
@@ -80,14 +114,16 @@ class neutron::agents::metadata (
     }
   }
 
-  if $enabled {
-    $ensure = 'running'
-  } else {
-    $ensure = 'stopped'
+  if $manage_service {
+    if $enabled {
+      $service_ensure = 'running'
+    } else {
+      $service_ensure = 'stopped'
+    }
   }
 
   service { 'neutron-metadata':
-    ensure  => $ensure,
+    ensure  => $service_ensure,
     name    => $::neutron::params::metadata_agent_service,
     enable  => $enabled,
     require => Class['neutron'],

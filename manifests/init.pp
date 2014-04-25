@@ -31,14 +31,13 @@
 #
 # [*core_plugin*]
 #   (optional) Neutron plugin provider
-#   Defaults to OVSQneutronPluginV2 (openvswitch)
+#   Defaults to openvswitch
+#   Could be bigswitch, brocade, cisco, embrane, hyperv, linuxbridge, midonet, ml2, mlnx, nec, nicira, plumgrid, ryu
 #
 # [*service_plugins*]
 #   (optional) Advanced service modules.
 #   Could be an array that can have these elements:
-#   neutron.services.firewall.fwaas_plugin.FirewallPlugin
-#   neutron.services.loadbalancer.plugin.LoadBalancerPlugin
-#   neutron.services.vpn.plugin.VPNDriverPlugin
+#   router, firewall, lbaas, vpnaas, metering
 #   Defaults to empty
 #
 # [*auth_strategy*]
@@ -55,15 +54,35 @@
 #
 # [*dhcp_lease_duration*]
 #   (optional) DHCP lease
-#   Defaults to 120 seconds
+#   Defaults to 86400 seconds
+#
+# [*dhcp_agents_per_network*]
+#   (optional) Number of DHCP agents scheduled to host a network.
+#   This enables redundant DHCP agents for configured networks.
+#   Defaults to 1
 #
 # [*allow_bulk*]
 #   (optional) Enable bulk crud operations
 #   Defaults to true
 #
+# [*allow_pagination*]
+#   (optional) Enable pagination
+#   Defaults to false
+#
+# [*allow_sorting*]
+#   (optional) Enable sorting
+#   Defaults to false
+#
 # [*allow_overlapping_ips*]
 #   (optional) Enables network namespaces
 #   Defaults to false
+#
+# [*report_interval*]
+#   (optional) Seconds between nodes reporting state to server; should be less than
+#   agent_down_time, best if it is half or less than agent_down_time.
+#   agent_down_time is a config for neutron-server, set by class neutron::server
+#   report_interval is a config for neutron agents, set by class neutron
+#   Defaults to: 30
 #
 # [*control_exchange*]
 #   (optional) What RPC queue/exchange to use
@@ -108,6 +127,15 @@
 #   (optional) Syslog facility to receive log lines
 #   Defaults to LOG_USER
 #
+# [*log_file*]
+#   (optional) Where to log
+#   Defaults to false
+#
+# [*log_dir*]
+#   (optional) Directory where logs should be stored
+#   If set to boolean false, it will not log to any directory
+#   Defaults to /var/log/neutron
+#
 class neutron (
   $enabled                     = true,
   $package_ensure              = 'present',
@@ -115,15 +143,19 @@ class neutron (
   $debug                       = false,
   $bind_host                   = '0.0.0.0',
   $bind_port                   = '9696',
-  $core_plugin                 = 'neutron.plugins.openvswitch.ovs_neutron_plugin.OVSNeutronPluginV2',
+  $core_plugin                 = 'openvswitch',
   $service_plugins             = undef,
   $auth_strategy               = 'keystone',
   $base_mac                    = 'fa:16:3e:00:00:00',
   $mac_generation_retries      = 16,
-  $dhcp_lease_duration         = 120,
+  $dhcp_lease_duration         = 86400,
+  $dhcp_agents_per_network     = 1,
   $allow_bulk                  = true,
+  $allow_pagination            = false,
+  $allow_sorting               = false,
   $allow_overlapping_ips       = false,
   $root_helper                 = 'sudo neutron-rootwrap /etc/neutron/rootwrap.conf',
+  $report_interval             = '30',
   $control_exchange            = 'neutron',
   $rpc_backend                 = 'neutron.openstack.common.rpc.impl_kombu',
   $rabbit_password             = false,
@@ -147,6 +179,8 @@ class neutron (
   $qpid_reconnect_interval     = 0,
   $use_syslog                  = false,
   $log_facility                = 'LOG_USER',
+  $log_file                    = false,
+  $log_dir                     = '/var/log/neutron',
 ) {
 
   include neutron::params
@@ -174,20 +208,43 @@ class neutron (
   }
 
   neutron_config {
-    'DEFAULT/verbose':                value => $verbose;
-    'DEFAULT/debug':                  value => $debug;
-    'DEFAULT/bind_host':              value => $bind_host;
-    'DEFAULT/bind_port':              value => $bind_port;
-    'DEFAULT/auth_strategy':          value => $auth_strategy;
-    'DEFAULT/core_plugin':            value => $core_plugin;
-    'DEFAULT/base_mac':               value => $base_mac;
-    'DEFAULT/mac_generation_retries': value => $mac_generation_retries;
-    'DEFAULT/dhcp_lease_duration':    value => $dhcp_lease_duration;
-    'DEFAULT/allow_bulk':             value => $allow_bulk;
-    'DEFAULT/allow_overlapping_ips':  value => $allow_overlapping_ips;
-    'DEFAULT/control_exchange':       value => $control_exchange;
-    'DEFAULT/rpc_backend':            value => $rpc_backend;
-    'AGENT/root_helper':              value => $root_helper;
+    'DEFAULT/verbose':                 value => $verbose;
+    'DEFAULT/debug':                   value => $debug;
+    'DEFAULT/bind_host':               value => $bind_host;
+    'DEFAULT/bind_port':               value => $bind_port;
+    'DEFAULT/auth_strategy':           value => $auth_strategy;
+    'DEFAULT/core_plugin':             value => $core_plugin;
+    'DEFAULT/base_mac':                value => $base_mac;
+    'DEFAULT/mac_generation_retries':  value => $mac_generation_retries;
+    'DEFAULT/dhcp_lease_duration':     value => $dhcp_lease_duration;
+    'DEFAULT/dhcp_agents_per_network': value => $dhcp_agents_per_network;
+    'DEFAULT/allow_bulk':              value => $allow_bulk;
+    'DEFAULT/allow_pagination':        value => $allow_pagination;
+    'DEFAULT/allow_sorting':           value => $allow_sorting;
+    'DEFAULT/allow_overlapping_ips':   value => $allow_overlapping_ips;
+    'DEFAULT/control_exchange':        value => $control_exchange;
+    'DEFAULT/rpc_backend':             value => $rpc_backend;
+    'agent/root_helper':               value => $root_helper;
+    'agent/report_interval':           value => $report_interval;
+  }
+
+  if $log_file {
+    neutron_config {
+      'DEFAULT/log_file': value => $log_file;
+      'DEFAULT/log_dir':  value => $log_dir;
+    }
+  } else {
+    if $log_dir {
+      neutron_config {
+        'DEFAULT/log_dir':  value  => $log_dir;
+        'DEFAULT/log_file': ensure => absent;
+      }
+    } else {
+      neutron_config {
+        'DEFAULT/log_dir':  ensure => absent;
+        'DEFAULT/log_file': ensure => absent;
+      }
+    }
   }
 
   if $service_plugins {

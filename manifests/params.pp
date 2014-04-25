@@ -7,6 +7,8 @@ class neutron::params {
     $server_service     = 'neutron-server'
     $client_package     = 'python-neutronclient'
 
+    $ml2_server_package = 'openstack-neutron-ml2'
+
     $ovs_agent_package   = false
     $ovs_agent_service   = 'neutron-openvswitch-agent'
     $ovs_server_package  = 'openstack-neutron-openvswitch'
@@ -24,6 +26,8 @@ class neutron::params {
     $cisco_server_package = 'openstack-neutron-cisco'
     $cisco_config_file    = '/etc/neutron/plugins/cisco/cisco_plugins.ini'
 
+    $nvp_server_package = 'openstack-neutron-nicira'
+
     $dhcp_agent_package = false
     $dhcp_agent_service = 'neutron-dhcp-agent'
 
@@ -34,8 +38,11 @@ class neutron::params {
 
     $haproxy_package   = 'haproxy'
 
-    $vpnaas_agent_package = false
-    $vpnaas_agent_service = 'neutron-vpnaas-agent'
+    $metering_agent_package = false
+    $metering_agent_service = 'neutron-metering-agent'
+
+    $vpnaas_agent_package = 'openstack-neutron-vpn-agent'
+    $vpnaas_agent_service = 'neutron-vpn-agent'
     $openswan_package     = 'openswan'
 
     $l3_agent_package   = false
@@ -54,6 +61,8 @@ class neutron::params {
     $server_service     = 'neutron-server'
     $client_package     = 'python-neutronclient'
 
+    $ml2_server_package = false
+
     $ovs_agent_package   = 'neutron-plugin-openvswitch-agent'
     $ovs_agent_service   = 'neutron-plugin-openvswitch-agent'
     $ovs_server_package  = 'neutron-plugin-openvswitch'
@@ -71,6 +80,8 @@ class neutron::params {
     $cisco_server_package = 'neutron-plugin-cisco'
     $cisco_config_file    = '/etc/neutron/plugins/cisco/cisco_plugins.ini'
 
+    $nvp_server_package = 'neutron-plugin-nicira'
+
     $dhcp_agent_package = 'neutron-dhcp-agent'
     $dhcp_agent_service = 'neutron-dhcp-agent'
 
@@ -79,8 +90,12 @@ class neutron::params {
 
     $haproxy_package   = 'haproxy'
 
-    $vpnaas_agent_package = 'neutron-plugin-vpn-agent'
-    $vpnaas_agent_service = 'neutron-vpnaas-agent'
+    $metering_agent_package = 'neutron-metering-agent'
+    $metering_agent_service = 'neutron-metering-agent'
+
+    $vpnaas_agent_package = 'neutron-vpn-agent'
+    $vpnaas_agent_service = 'neutron-vpn-agent'
+
     $openswan_package     = 'openswan'
 
     $metadata_agent_package = 'neutron-metadata-agent'

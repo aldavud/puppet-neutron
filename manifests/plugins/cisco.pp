@@ -85,16 +85,16 @@ class neutron::plugins::cisco(
 
   ensure_resource('file', '/etc/neutron/plugins', {
     ensure => directory,
-    owner   => 'root',
-    group   => 'neutron',
-    mode    => '0640'}
+    owner  => 'root',
+    group  => 'neutron',
+    mode   => '0640'}
   )
 
   ensure_resource('file', '/etc/neutron/plugins/cisco', {
     ensure => directory,
-    owner   => 'root',
-    group   => 'neutron',
-    mode    => '0640'}
+    owner  => 'root',
+    group  => 'neutron',
+    mode   => '0640'}
   )
 
   # Ensure the neutron package is installed before config is set
@@ -169,13 +169,11 @@ class neutron::plugins::cisco(
     'keystone/tenant'  : value => $keystone_tenant;
   }
 
-  if $::osfamily == 'Redhat' {
-    file {'/etc/neutron/plugin.ini':
-      ensure  => link,
-      target  => '/etc/neutron/plugins/cisco/cisco_plugins.ini',
-      require => Package['neutron-plugin-cisco'],
-    }
-  }
-
-
+  # In RH, this link is used to start Neutron process but in Debian, it's used only
+  # to manage database synchronization.
+  ensure_resource('file', '/etc/neutron/plugin.ini', {
+    ensure  => link,
+    target  => '/etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini',
+    require => Package['neutron-plugin-ovs']
+  })
 }

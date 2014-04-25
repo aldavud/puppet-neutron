@@ -4,11 +4,12 @@ describe 'neutron::agents::ovs' do
 
   let :pre_condition do
     "class { 'neutron': rabbit_password => 'passw0rd' }\n" +
-    "class { 'neutron::plugins::ovs': network_vlan_ranges => 'test' }"
+    "class { 'neutron::plugins::ovs': network_vlan_ranges => 'physnet1:1000:2000' }"
   end
 
   let :default_params do
     { :package_ensure       => 'present',
+      :manage_service       => true,
       :enabled              => true,
       :bridge_uplinks       => [],
       :bridge_mappings      => [],
@@ -29,7 +30,7 @@ describe 'neutron::agents::ovs' do
       default_params.merge(params)
     end
 
-    it { should include_class('neutron::params') }
+    it { should contain_class('neutron::params') }
 
     it 'configures ovs_neutron_plugin.ini' do
       should contain_neutron_plugin_ovs('AGENT/polling_interval').with_value(p[:polling_interval])
@@ -68,6 +69,20 @@ describe 'neutron::agents::ovs' do
         :ensure  => 'running',
         :require => 'Class[Neutron]'
       )
+    end
+
+    context 'when not installing ovs agent package' do
+      before :each do
+        params.merge!(:package_ensure => 'absent')
+      end
+      it 'uninstalls neutron ovs agent package' do
+        if platform_params.has_key?(:ovs_agent_package)
+          should contain_package('neutron-plugin-ovs-agent').with(
+            :name   => platform_params[:ovs_agent_package],
+            :ensure => p[:package_ensure]
+          )
+        end
+      end
     end
 
     context 'when supplying a firewall driver' do
@@ -124,6 +139,20 @@ describe 'neutron::agents::ovs' do
             :ensure  => 'present',
             :before => 'Service[neutron-plugin-ovs-service]'
           )
+        end
+      end
+
+      context 'with vxlan tunneling' do
+        before :each do
+          params.merge!(:enable_tunneling => true,
+                        :local_ip => '127.0.0.1',
+                        :tunnel_types => ['vxlan'],
+                        :vxlan_udp_port => '4789')
+        end
+
+        it 'should perform vxlan network configuration' do
+          should contain_neutron_plugin_ovs('agent/tunnel_types').with_value(params[:tunnel_types])
+          should contain_neutron_plugin_ovs('agent/vxlan_udp_port').with_value(params[:vxlan_udp_port])
         end
       end
     end

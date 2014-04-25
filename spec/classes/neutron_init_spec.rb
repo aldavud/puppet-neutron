@@ -6,13 +6,15 @@ describe 'neutron' do
     { :package_ensure      => 'present',
       :verbose             => false,
       :debug               => false,
-      :core_plugin         => 'neutron.plugins.linuxbridge.lb_neutron_plugin.LinuxBridgePluginV2',
+      :core_plugin         => 'linuxbridge',
       :rabbit_host         => '127.0.0.1',
       :rabbit_port         => 5672,
       :rabbit_hosts        => false,
       :rabbit_user         => 'guest',
       :rabbit_password     => 'guest',
-      :rabbit_virtual_host => '/'
+      :rabbit_virtual_host => '/',
+      :log_dir             => '/var/log/neutron',
+      :report_interval     => '30',
     }
   end
 
@@ -39,18 +41,26 @@ describe 'neutron' do
         it_configures 'a neutron base installation'
         it_configures 'rabbit HA with multiple hosts'
       end
+
+      it 'configures logging' do
+        should contain_neutron_config('DEFAULT/log_file').with_ensure('absent')
+        should contain_neutron_config('DEFAULT/log_dir').with_value(params[:log_dir])
+      end
+
     end
 
     it_configures 'with syslog disabled'
     it_configures 'with syslog enabled'
     it_configures 'with syslog enabled and custom settings'
+    it_configures 'with log_file specified'
+    it_configures 'with logging disabled'
     it_configures 'without service_plugins'
     it_configures 'with service_plugins'
   end
 
   shared_examples_for 'a neutron base installation' do
 
-    it { should include_class('neutron::params') }
+    it { should contain_class('neutron::params') }
 
     it 'configures neutron configuration folder' do
       should contain_file('/etc/neutron/').with(
@@ -92,11 +102,15 @@ describe 'neutron' do
       should contain_neutron_config('DEFAULT/core_plugin').with_value( params[:core_plugin] )
       should contain_neutron_config('DEFAULT/base_mac').with_value('fa:16:3e:00:00:00')
       should contain_neutron_config('DEFAULT/mac_generation_retries').with_value(16)
-      should contain_neutron_config('DEFAULT/dhcp_lease_duration').with_value(120)
+      should contain_neutron_config('DEFAULT/dhcp_lease_duration').with_value(86400)
+      should contain_neutron_config('DEFAULT/dhcp_agents_per_network').with_value(1)
       should contain_neutron_config('DEFAULT/allow_bulk').with_value(true)
+      should contain_neutron_config('DEFAULT/allow_pagination').with_value(false)
+      should contain_neutron_config('DEFAULT/allow_sorting').with_value(false)
       should contain_neutron_config('DEFAULT/allow_overlapping_ips').with_value(false)
       should contain_neutron_config('DEFAULT/control_exchange').with_value('neutron')
-      should contain_neutron_config('AGENT/root_helper').with_value('sudo neutron-rootwrap /etc/neutron/rootwrap.conf')
+      should contain_neutron_config('agent/root_helper').with_value('sudo neutron-rootwrap /etc/neutron/rootwrap.conf')
+      should contain_neutron_config('agent/report_interval').with_value('30')
     end
   end
 
@@ -149,6 +163,30 @@ describe 'neutron' do
     end
   end
 
+  shared_examples_for 'with log_file specified' do
+    before do
+      params.merge!(
+        :log_file => '/var/log/neutron/server.log',
+        :log_dir  => '/tmp/log/neutron'
+      )
+    end
+    it 'configures logging' do
+      should contain_neutron_config('DEFAULT/log_file').with_value(params[:log_file])
+      should contain_neutron_config('DEFAULT/log_dir').with_value(params[:log_dir])
+    end
+  end
+
+  shared_examples_for 'with logging disabled' do
+    before { params.merge!(
+      :log_file => false,
+      :log_dir  => false
+    )}
+    it {
+      should contain_neutron_config('DEFAULT/log_file').with_ensure('absent')
+      should contain_neutron_config('DEFAULT/log_dir').with_ensure('absent')
+    }
+  end
+
   shared_examples_for 'without service_plugins' do
     it { should_not contain_neutron_config('DEFAULT/service_plugins') }
   end
@@ -156,12 +194,12 @@ describe 'neutron' do
   shared_examples_for 'with service_plugins' do
     before do
       params.merge!(
-        :service_plugins => ['neutron.services.firewall.fwaas_plugin.FirewallPlugin','neutron.services.loadbalancer.plugin.LoadBalancerPlugin','neutron.services.vpn.plugin.VPNDriverPlugin']
+        :service_plugins => ['router','firewall','lbaas','vpnaas','metering']
       )
     end
 
     it do
-      should contain_neutron_config('DEFAULT/service_plugins').with_value('neutron.services.firewall.fwaas_plugin.FirewallPlugin,neutron.services.loadbalancer.plugin.LoadBalancerPlugin,neutron.services.vpn.plugin.VPNDriverPlugin')
+      should contain_neutron_config('DEFAULT/service_plugins').with_value('router,firewall,lbaas,vpnaas,metering')
     end
 
   end

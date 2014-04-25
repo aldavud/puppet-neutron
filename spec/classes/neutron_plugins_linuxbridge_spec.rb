@@ -16,7 +16,7 @@ describe 'neutron::plugins::linuxbridge' do
 
   shared_examples_for 'neutron linuxbridge plugin' do
 
-    it { should include_class('neutron::params') }
+    it { should contain_class('neutron::params') }
 
     it 'installs neutron linuxbridge plugin package' do
       should contain_package('neutron-plugin-linuxbridge').with(
@@ -33,6 +33,15 @@ describe 'neutron::plugins::linuxbridge' do
         :value => params[:network_vlan_ranges]
       )
     end
+
+    it 'should create plugin symbolic link' do
+      should contain_file('/etc/neutron/plugin.ini').with(
+        :ensure  => 'link',
+        :target  => '/etc/neutron/plugins/linuxbridge/linuxbridge_conf.ini',
+        :require => 'Package[neutron-plugin-linuxbridge]'
+      )
+    end
+
   end
 
 

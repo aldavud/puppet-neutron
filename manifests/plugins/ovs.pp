@@ -19,7 +19,8 @@ class neutron::plugins::ovs (
   # if type is vlan or flat, a default of physnet1:1000:2000 is used
   # otherwise this will not be set by default.
   $network_vlan_ranges  = undef,
-  $tunnel_id_ranges     = '1:1000'
+  $tunnel_id_ranges     = '1:1000',
+  $vxlan_udp_port       = 4789
 ) {
 
   include neutron::params
@@ -53,44 +54,52 @@ class neutron::plugins::ovs (
   }
 
   neutron_plugin_ovs {
-    'OVS/tenant_network_type':      value => $tenant_network_type;
+    'OVS/tenant_network_type': value => $tenant_network_type;
   }
 
-  if($tenant_network_type == 'gre') {
+  if $tenant_network_type in ['gre', 'vxlan']  {
+    validate_tunnel_id_ranges($tunnel_id_ranges)
     neutron_plugin_ovs {
       # this is set by the plugin and the agent - since the plugin node has the agent installed
       # we rely on it setting it.
       # TODO(ijw): do something with a virtualised node
-      # 'OVS/enable_tunneling':   value => 'True';
+      # 'OVS/enable_tunneling': value => 'True';
       'OVS/tunnel_id_ranges':   value => $tunnel_id_ranges;
+      'OVS/tunnel_type':        value => $tenant_network_type;
     }
   }
 
-  # If the user hasn't specified vlan_ranges, fail for the modes where
-  # it is required, otherwise keep it absent
-  if ($tenant_network_type == 'vlan') or ($tenant_network_type == 'flat') {
-    if ! $network_vlan_ranges {
+  validate_vxlan_udp_port($vxlan_udp_port)
+  neutron_plugin_ovs { 'OVS/vxlan_udp_port': value => $vxlan_udp_port; }
+
+  if ! $network_vlan_ranges {
+    # If the user hasn't specified vlan_ranges, fail for the modes where
+    # it is required, otherwise keep it absent
+    if $tenant_network_type in ['vlan', 'flat'] {
       fail('When using the vlan network type, network_vlan_ranges is required')
-    }
-  } else {
-    if ! $network_vlan_ranges {
+    } else {
       neutron_plugin_ovs { 'OVS/network_vlan_ranges': ensure => absent }
     }
-  }
+  } else {
+    # This might be set by the user for the gre or vxlan case where
+    # provider networks are in use
+    if !is_array($network_vlan_ranges) {
+      $arr_network_vlan_ranges = strip(split($network_vlan_ranges, ','))
+    } else {
+      $arr_network_vlan_ranges = $network_vlan_ranges
+    }
 
-  # This might be set by the user for the gre case where
-  # provider networks are in use
-  if $network_vlan_ranges {
+    validate_network_vlan_ranges($arr_network_vlan_ranges)
     neutron_plugin_ovs {
-      'OVS/network_vlan_ranges': value => $network_vlan_ranges
+      'OVS/network_vlan_ranges': value => join($arr_network_vlan_ranges, ',');
     }
   }
 
-  if $::osfamily == 'Redhat' {
-    file {'/etc/neutron/plugin.ini':
-      ensure  => link,
-      target  => '/etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini',
-      require => Package['neutron-plugin-ovs']
-    }
+  # In RH, this link is used to start Neutron process but in Debian, it's used only
+  # to manage database synchronization.
+  file {'/etc/neutron/plugin.ini':
+    ensure  => link,
+    target  => '/etc/neutron/plugins/openvswitch/ovs_neutron_plugin.ini',
+    require => Package['neutron-plugin-ovs']
   }
 }

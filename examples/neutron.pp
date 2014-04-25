@@ -8,6 +8,7 @@ class { 'neutron':
   rabbit_password       => 'password',
   rabbit_user           => 'guest',
   rabbit_host           => 'localhost',
+  service_plugins       => ['metering']
 }
 
 # The API server talks to keystone for authorisation
@@ -16,10 +17,18 @@ class { 'neutron::server':
   connection        => 'mysql://neutron:password@192.168.1.1/neutron',
 }
 
+# Configure nova notifications system
+class { 'neutron::server::notifications':
+  nova_admin_tenant_name     => 'admin',
+  nova_admin_password        => 'secrete',
+}
+
 # Various agents
 class { 'neutron::agents::dhcp': }
 class { 'neutron::agents::l3': }
 class { 'neutron::agents::lbaas': }
+class { 'neutron::agents::vpnaas': }
+class { 'neutron::agents::metering': }
 
 # This plugin configures Neutron for OVS on the server
 # Agent
@@ -33,6 +42,14 @@ class { 'neutron::plugins::ovs':
   tenant_network_type => 'gre',
 }
 
+# ml2 plugin with vxlan as ml2 driver and ovs as mechanism driver
+class { 'neutron::plugins::ml2':
+  type_drivers          => ['vxlan'],
+  tenant_network_types  => ['vxlan'],
+  vxlan_group           => '239.1.1.1',
+  mechanism_drivers     => ['openvswitch'],
+  vni_ranges            => ['0:300']
+}
 
 ### Compute Nodes:
 # Generally, any machine with a neutron element running on it talks

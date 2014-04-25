@@ -20,7 +20,9 @@ describe 'neutron::agents::l3' do
       :send_arp_for_ha              => '3',
       :periodic_interval            => '40',
       :periodic_fuzzy_delay         => '5',
-      :enable_metadata_proxy        => true }
+      :enable_metadata_proxy        => true,
+      :network_device_mtu           => nil,
+      :router_delete_namespaces     => false }
   end
 
   let :params do
@@ -32,7 +34,7 @@ describe 'neutron::agents::l3' do
       default_params.merge(params)
     end
 
-    it { should include_class('neutron::params') }
+    it { should contain_class('neutron::params') }
 
     it 'configures l3_agent.ini' do
       should contain_neutron_l3_agent_config('DEFAULT/debug').with_value(p[:debug])
@@ -47,6 +49,8 @@ describe 'neutron::agents::l3' do
       should contain_neutron_l3_agent_config('DEFAULT/periodic_interval').with_value(p[:periodic_interval])
       should contain_neutron_l3_agent_config('DEFAULT/periodic_fuzzy_delay').with_value(p[:periodic_fuzzy_delay])
       should contain_neutron_l3_agent_config('DEFAULT/enable_metadata_proxy').with_value(p[:enable_metadata_proxy])
+      should contain_neutron_l3_agent_config('DEFAULT/network_device_mtu').with_ensure('absent')
+      should contain_neutron_l3_agent_config('DEFAULT/router_delete_namespaces').with_value(p[:router_delete_namespaces])
     end
 
     it 'installs neutron l3 agent package' do
@@ -71,6 +75,25 @@ describe 'neutron::agents::l3' do
       )
     end
 
+    context 'with manage_service as false' do
+      before :each do
+        params.merge!(:manage_service => false)
+      end
+      it 'should not start/stop service' do
+        should contain_service('neutron-l3').without_ensure
+      end
+    end
+  end
+
+  shared_examples_for 'neutron l3 agent with network_device_mtu specified' do
+    before do
+      params.merge!(
+        :network_device_mtu => 9999
+      )
+    end
+    it 'configures network_device_mtu' do
+      should contain_neutron_l3_agent_config('DEFAULT/network_device_mtu').with_value(params[:network_device_mtu])
+    end
   end
 
   context 'on Debian platforms' do
@@ -84,6 +107,7 @@ describe 'neutron::agents::l3' do
     end
 
     it_configures 'neutron l3 agent'
+    it_configures 'neutron l3 agent with network_device_mtu specified'
   end
 
   context 'on RedHat platforms' do
@@ -96,5 +120,6 @@ describe 'neutron::agents::l3' do
     end
 
     it_configures 'neutron l3 agent'
+    it_configures 'neutron l3 agent with network_device_mtu specified'
   end
 end

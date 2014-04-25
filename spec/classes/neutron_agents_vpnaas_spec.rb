@@ -34,6 +34,7 @@ describe 'neutron::agents::vpnaas' do
     { :package_ensure              => 'present',
       :enabled                     => true,
       :vpn_device_driver           => 'neutron.services.vpn.device_drivers.ipsec.OpenSwanDriver',
+      :interface_driver            => 'neutron.agent.linux.interface.OVSInterfaceDriver',
       :ipsec_status_check_interval => '60'
     }
   end
@@ -44,13 +45,27 @@ describe 'neutron::agents::vpnaas' do
       default_params.merge(params)
     end
 
-    it { should include_class('neutron::params') }
+    it { should contain_class('neutron::params') }
 
     it_configures 'openswan vpnaas_driver'
 
     it 'configures vpnaas_agent.ini' do
       should contain_neutron_vpnaas_agent_config('vpnagent/vpn_device_driver').with_value(p[:vpn_device_driver]);
       should contain_neutron_vpnaas_agent_config('ipsec/ipsec_status_check_interval').with_value(p[:ipsec_status_check_interval]);
+      should contain_neutron_vpnaas_agent_config('DEFAULT/interface_driver').with_value(p[:interface_driver]);
+      should contain_neutron_vpnaas_agent_config('DEFAULT/external_network_bridge').with_ensure('absent');
+    end
+
+    context 'with external_network_bridge as br-ex' do
+      before do
+      params.merge!(
+        :external_network_bridge => 'br-ex'
+      )
+      end
+
+      it 'configures vpnaas_agent.ini' do
+        should contain_neutron_vpnaas_agent_config('DEFAULT/external_network_bridge').with_value(p[:external_network_bridge]);
+      end
     end
 
     it 'installs neutron vpnaas agent package' do
@@ -74,6 +89,15 @@ describe 'neutron::agents::vpnaas' do
         :require => 'Class[Neutron]'
       )
     end
+
+    context 'with manage_service as false' do
+      before :each do
+        params.merge!(:manage_service => false)
+      end
+      it 'should not start/stop service' do
+        should contain_service('neutron-vpnaas-service').without_ensure
+      end
+    end
   end
 
   shared_examples_for 'openswan vpnaas_driver' do
@@ -88,16 +112,15 @@ describe 'neutron::agents::vpnaas' do
     end
   end
 
-
   context 'on Debian platforms' do
     let :facts do
       { :osfamily => 'Debian' }
     end
 
     let :platform_params do
-      { :openswan_package   =>  'openswan',
-        :vpnaas_agent_package => 'neutron-plugin-vpn-agent',
-        :vpnaas_agent_service => 'neutron-vpnaas-agent' }
+      { :openswan_package     => 'openswan',
+        :vpnaas_agent_package => 'neutron-vpn-agent',
+        :vpnaas_agent_service => 'neutron-vpn-agent' }
     end
 
     it_configures 'neutron vpnaas agent'
@@ -110,7 +133,8 @@ describe 'neutron::agents::vpnaas' do
 
     let :platform_params do
       { :openswan_package   => 'openswan',
-        :vpnaas_agent_service => 'neutron-vpnaas-agent'}
+        :vpnaas_agent_package => 'openstack-neutron-vpn-agent',
+        :vpnaas_agent_service => 'neutron-vpn-agent'}
     end
 
     it_configures 'neutron vpnaas agent'

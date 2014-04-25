@@ -10,6 +10,10 @@
 # [*enabled*]
 #   (optional) Enable state for service. Defaults to 'true'.
 #
+# [*manage_service*]
+#   (optional) Whether to start/stop the service
+#   Defaults to true
+#
 # [*debug*]
 #   (optional) Show debugging output in log. Defaults to false.
 #
@@ -17,7 +21,7 @@
 #   (optional) Defaults to 'neutron.agent.linux.interface.OVSInterfaceDriver'.
 #
 # [*device_driver*]
-#   (optional) Defaults to 'neutron.plugins.services.agent_loadbalancer.drivers.haproxy.namespace_driver.HaproxyNSDriver'.
+#   (optional) Defaults to 'neutron.services.loadbalancer.drivers.haproxy.namespace_driver.HaproxyNSDriver'.
 #
 # [*use_namespaces*]
 #   (optional) Allow overlapping IP (Must have kernel build with
@@ -27,27 +31,34 @@
 # [*user_group*]
 #   (optional) The user group. Defaults to nogroup.
 #
+# [*manage_haproxy_package*]
+#   (optional) Whether to manage the haproxy package.
+#   Disable this if you are using the puppetlabs-haproxy module
+#   Defaults to true
+#
 class neutron::agents::lbaas (
-  $package_ensure   = present,
-  $enabled          = true,
-  $debug            = false,
-  $interface_driver = 'neutron.agent.linux.interface.OVSInterfaceDriver',
-  $device_driver    = 'neutron.plugins.services.agent_loadbalancer.drivers.haproxy.namespace_driver.HaproxyNSDriver',
-  $use_namespaces   = true,
-  $user_group       = 'nogroup',
+  $package_ensure         = present,
+  $enabled                = true,
+  $manage_service         = true,
+  $debug                  = false,
+  $interface_driver       = 'neutron.agent.linux.interface.OVSInterfaceDriver',
+  $device_driver          = 'neutron.services.loadbalancer.drivers.haproxy.namespace_driver.HaproxyNSDriver',
+  $use_namespaces         = true,
+  $user_group             = 'nogroup',
+  $manage_haproxy_package = true,
 ) {
 
   include neutron::params
 
-  Neutron_config<||>            ~> Service['neutron-lbaas-service']
+  Neutron_config<||>             ~> Service['neutron-lbaas-service']
   Neutron_lbaas_agent_config<||> ~> Service['neutron-lbaas-service']
 
   case $device_driver {
     /\.haproxy/: {
-      Package['haproxy'] -> Package<| title == 'neutron-lbaas-agent' |>
-      package { 'haproxy':
-        ensure => present,
-        name   => $::neutron::params::haproxy_package,
+      Package[$::neutron::params::haproxy_package] -> Package<| title == 'neutron-lbaas-agent' |>
+
+      if $manage_haproxy_package {
+        ensure_packages([$::neutron::params::haproxy_package])
       }
     }
     default: {
@@ -63,7 +74,7 @@ class neutron::agents::lbaas (
     'DEFAULT/interface_driver':   value => $interface_driver;
     'DEFAULT/device_driver':      value => $device_driver;
     'DEFAULT/use_namespaces':     value => $use_namespaces;
-    'DEFAULT/user_group':         value => $user_group;
+    'haproxy/user_group':         value => $user_group;
   }
 
   if $::neutron::params::lbaas_agent_package {
@@ -80,14 +91,16 @@ class neutron::agents::lbaas (
     Package['neutron'] -> Neutron_lbaas_agent_config<||>
   }
 
-  if $enabled {
-    $ensure = 'running'
-  } else {
-    $ensure = 'stopped'
+  if $manage_service {
+    if $enabled {
+      $service_ensure = 'running'
+    } else {
+      $service_ensure = 'stopped'
+    }
   }
 
   service { 'neutron-lbaas-service':
-    ensure  => $ensure,
+    ensure  => $service_ensure,
     name    => $::neutron::params::lbaas_agent_service,
     enable  => $enabled,
     require => Class['neutron'],

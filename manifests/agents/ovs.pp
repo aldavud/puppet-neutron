@@ -10,13 +10,16 @@
 #
 class neutron::agents::ovs (
   $package_ensure       = 'present',
+  $manage_service       = true,
   $enabled              = true,
   $bridge_uplinks       = [],
   $bridge_mappings      = [],
   $integration_bridge   = 'br-int',
   $enable_tunneling     = false,
+  $tunnel_types         = [],
   $local_ip             = false,
   $tunnel_bridge        = 'br-tun',
+  $vxlan_udp_port       = 4789,
   $polling_interval     = 2,
   $firewall_driver      = 'neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver'
 ) {
@@ -28,8 +31,13 @@ class neutron::agents::ovs (
     fail('Local ip for ovs agent must be set when tunneling is enabled')
   }
 
-  Neutron_config<||>     ~> Service['neutron-plugin-ovs-service']
-  Neutron_plugin_ovs<||> ~> Service['neutron-plugin-ovs-service']
+
+  if $enabled {
+    Neutron_config<||>     ~> Service['neutron-plugin-ovs-service']
+    Neutron_plugin_ovs<||> ~> Service['neutron-plugin-ovs-service']
+    Neutron::Plugins::Ovs::Bridge<||> -> Service['neutron-plugin-ovs-service']
+    Neutron::Plugins::Ovs::Port<||> -> Service['neutron-plugin-ovs-service']
+  }
 
   if ($bridge_mappings != []) {
     # bridge_mappings are used to describe external networks that are
@@ -50,12 +58,8 @@ class neutron::agents::ovs (
     neutron_plugin_ovs {
       'OVS/bridge_mappings': value => $br_map_str;
     }
-    neutron::plugins::ovs::bridge{ $bridge_mappings:
-      before => Service['neutron-plugin-ovs-service'],
-    }
-    neutron::plugins::ovs::port{ $bridge_uplinks:
-      before => Service['neutron-plugin-ovs-service'],
-    }
+    neutron::plugins::ovs::bridge{ $bridge_mappings: }
+    neutron::plugins::ovs::port{ $bridge_uplinks: }
   }
 
   neutron_plugin_ovs {
@@ -85,6 +89,18 @@ class neutron::agents::ovs (
       'OVS/enable_tunneling': value => true;
       'OVS/tunnel_bridge':    value => $tunnel_bridge;
       'OVS/local_ip':         value => $local_ip;
+    }
+
+    if size($tunnel_types) > 0 {
+      neutron_plugin_ovs {
+        'agent/tunnel_types': value => join($tunnel_types, ',');
+      }
+    }
+    if 'vxlan' in $tunnel_types {
+      validate_vxlan_udp_port($vxlan_udp_port)
+      neutron_plugin_ovs {
+        'agent/vxlan_udp_port': value => $vxlan_udp_port;
+      }
     }
   } else {
     neutron_plugin_ovs {
@@ -116,24 +132,24 @@ class neutron::agents::ovs (
     }
   }
 
-  if $enabled {
-    $service_ensure = 'running'
-  } else {
-    $service_ensure = 'stopped'
-  }
-
-  service { 'neutron-plugin-ovs-service':
-    ensure  => $service_ensure,
-    name    => $::neutron::params::ovs_agent_service,
-    enable  => $enabled,
-    require => Class['neutron'],
-  }
-
-  if $::neutron::params::ovs_cleanup_service {
-    service {'ovs-cleanup-service':
-      ensure => $service_ensure,
-      name   => $::neutron::params::ovs_cleanup_service,
-      enable => $enabled,
+  if $manage_service {
+    if $enabled {
+      $service_ensure = 'running'
+    } else {
+      $service_ensure = 'stopped'
+    }
+    service { 'neutron-plugin-ovs-service':
+      ensure  => $service_ensure,
+      name    => $::neutron::params::ovs_agent_service,
+      enable  => $enabled,
+      require => Class['neutron'],
+    }
+    if $::neutron::params::ovs_cleanup_service {
+      service {'ovs-cleanup-service':
+        ensure => $service_ensure,
+        name   => $::neutron::params::ovs_cleanup_service,
+        enable => $enabled,
+      }
     }
   }
 }

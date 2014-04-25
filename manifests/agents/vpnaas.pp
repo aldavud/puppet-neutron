@@ -27,8 +27,18 @@
 # [*enabled*]
 #   (optional) Enable state for service. Defaults to 'true'.
 #
+# [*manage_service*]
+#   (optional) Whether to start/stop the service
+#   Defaults to true
+#
 # [*vpn_device_driver*]
 #   (optional) Defaults to 'neutron.services.vpn.device_drivers.ipsec.OpenSwanDriver'.
+#
+# [*interface_driver*]
+#  (optional) Defaults to 'neutron.agent.linux.interface.OVSInterfaceDriver'.
+#
+# [*external_network_bridge]
+#  (optional) Defaults to undef
 #
 # [*ipsec_status_check_interval*]
 #   (optional) Status check interval. Defaults to '60'.
@@ -36,13 +46,16 @@
 class neutron::agents::vpnaas (
   $package_ensure              = present,
   $enabled                     = true,
+  $manage_service              = true,
   $vpn_device_driver           = 'neutron.services.vpn.device_drivers.ipsec.OpenSwanDriver',
+  $interface_driver            = 'neutron.agent.linux.interface.OVSInterfaceDriver',
+  $external_network_bridge     = undef,
   $ipsec_status_check_interval = '60'
 ) {
 
   include neutron::params
 
-  Neutron_config<||>            ~> Service['neutron-vpnaas-service']
+  Neutron_config<||>              ~> Service['neutron-vpnaas-service']
   Neutron_vpnaas_agent_config<||> ~> Service['neutron-vpnaas-service']
 
   case $vpn_device_driver {
@@ -64,6 +77,17 @@ class neutron::agents::vpnaas (
   neutron_vpnaas_agent_config {
     'vpnagent/vpn_device_driver':        value => $vpn_device_driver;
     'ipsec/ipsec_status_check_interval': value => $ipsec_status_check_interval;
+    'DEFAULT/interface_driver':          value => $interface_driver;
+  }
+
+  if ($external_network_bridge) {
+    neutron_vpnaas_agent_config {
+      'DEFAULT/external_network_bridge': value => $external_network_bridge;
+    }
+  } else {
+    neutron_vpnaas_agent_config {
+      'DEFAULT/external_network_bridge': ensure => absent;
+    }
   }
 
   if $::neutron::params::vpnaas_agent_package {
@@ -74,19 +98,19 @@ class neutron::agents::vpnaas (
       name    => $::neutron::params::vpnaas_agent_package,
     }
   } else {
-    # Some platforms (RedHat) do not provide a neutron VPNaaS agent package.
-    # The neutron VPNaaS agent config file is provided by the neutron package.
     Package['neutron'] -> Neutron_vpnaas_agent_config<||>
   }
 
-  if $enabled {
-    $ensure = 'running'
-  } else {
-    $ensure = 'stopped'
+  if $manage_service {
+    if $enabled {
+      $service_ensure = 'running'
+    } else {
+      $service_ensure = 'stopped'
+    }
   }
 
   service { 'neutron-vpnaas-service':
-    ensure  => $ensure,
+    ensure  => $service_ensure,
     name    => $::neutron::params::vpnaas_agent_service,
     enable  => $enabled,
     require => Class['neutron'],

@@ -14,6 +14,10 @@
 #   (optional) The state of the service
 #   Defaults to true
 #
+# [*manage_service*]
+#   (optional) Whether to start/stop the service
+#   Defaults to true
+#
 # [*debug*]
 #   (optional) Print debug info in logs
 #   Defaults to false
@@ -63,9 +67,18 @@
 #   (optional) can be set to False if the Nova metadata server is not available
 #   Defaults to True
 #
+# [*network_device_mtu*]
+#   (optional) The MTU size for the interfaces managed by the L3 agent
+#   Defaults to undef
+#
+# [*router_delete_namespaces*]
+#   (optional) namespaces can be deleted cleanly on the host running the L3 agent
+#   Defaults to False
+#
 class neutron::agents::l3 (
   $package_ensure               = 'present',
   $enabled                      = true,
+  $manage_service               = true,
   $debug                        = false,
   $external_network_bridge      = 'br-ex',
   $use_namespaces               = true,
@@ -77,7 +90,9 @@ class neutron::agents::l3 (
   $send_arp_for_ha              = '3',
   $periodic_interval            = '40',
   $periodic_fuzzy_delay         = '5',
-  $enable_metadata_proxy        = true
+  $enable_metadata_proxy        = true,
+  $network_device_mtu           = undef,
+  $router_delete_namespaces     = false
 ) {
 
   include neutron::params
@@ -98,6 +113,17 @@ class neutron::agents::l3 (
     'DEFAULT/periodic_interval':            value => $periodic_interval;
     'DEFAULT/periodic_fuzzy_delay':         value => $periodic_fuzzy_delay;
     'DEFAULT/enable_metadata_proxy':        value => $enable_metadata_proxy;
+    'DEFAULT/router_delete_namespaces':     value => $router_delete_namespaces;
+  }
+
+  if $network_device_mtu {
+    neutron_l3_agent_config {
+      'DEFAULT/network_device_mtu':           value => $network_device_mtu;
+    }
+  } else {
+    neutron_l3_agent_config {
+      'DEFAULT/network_device_mtu':           ensure => absent;
+    }
   }
 
   if $::neutron::params::l3_agent_package {
@@ -113,14 +139,16 @@ class neutron::agents::l3 (
     Package['neutron'] -> Neutron_l3_agent_config<||>
   }
 
-  if $enabled {
-    $ensure = 'running'
-  } else {
-    $ensure = 'stopped'
+  if $manage_service {
+    if $enabled {
+      $service_ensure = 'running'
+    } else {
+      $service_ensure = 'stopped'
+    }
   }
 
   service { 'neutron-l3':
-    ensure  => $ensure,
+    ensure  => $service_ensure,
     name    => $::neutron::params::l3_agent_service,
     enable  => $enabled,
     require => Class['neutron'],
