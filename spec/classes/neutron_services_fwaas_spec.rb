@@ -44,12 +44,13 @@ describe 'neutron::services::fwaas' do
     end
   end
 
-  context 'with default driver' do
-    before do
-      params.merge!({
-        :driver  => 'neutron.services.firewall.drivers.linux.iptables_fwaas.IptablesFwaasDriver',
-        :enabled => true
-      })
+  context 'on Debian platforms' do
+    let :facts do
+      { :osfamily => 'Debian' }
+    end
+
+    let :platform_params do
+      { :l3_agent_package => 'neutron-l3-agent' }
     end
 
     it_configures 'neutron fwaas service plugin'

@@ -27,6 +27,11 @@
 # [*user_group*]
 #   (optional) The user group. Defaults to nogroup.
 #
+# [*manage_haproxy_package*]
+#   (optional) Whether to manage the haproxy package.
+#   Disable this if you are using the puppetlabs-haproxy module
+#   Defaults to true
+#
 class neutron::agents::lbaas (
   $package_ensure   = present,
   $enabled          = true,

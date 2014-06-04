@@ -17,7 +17,7 @@ describe 'neutron::agents::linuxbridge' do
 
   shared_examples_for 'neutron linuxbridge agent' do
 
-    it { should include_class('neutron::params') }
+    it { should contain_class('neutron::params') }
 
     it 'configures neutron linuxbridge agent service' do
       should contain_service('neutron-plugin-linuxbridge-service').with(
@@ -64,10 +64,17 @@ describe 'neutron::agents::linuxbridge' do
     end
 
     let :platform_params do
-      { :linuxbridge_agent_package => 'openstack-neutron-linuxbridge',
+      { :linuxbridge_server_package => 'openstack-neutron-linuxbridge',
         :linuxbridge_agent_service => 'neutron-linuxbridge-agent' }
     end
 
     it_configures 'neutron linuxbridge agent'
+
+    it 'installs neutron linuxbridge package' do
+      should contain_package('neutron-plugin-linuxbridge').with(
+        :ensure => params[:package_ensure],
+        :name   => platform_params[:linuxbridge_server_package]
+      )
+    end
   end
 end

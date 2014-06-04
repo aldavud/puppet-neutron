@@ -55,7 +55,12 @@
 #
 # [*dhcp_lease_duration*]
 #   (optional) DHCP lease
-#   Defaults to 120 seconds
+#   Defaults to 86400 seconds
+#
+# [*dhcp_agents_per_network*]
+#   (optional) Number of DHCP agents scheduled to host a network.
+#   This enables redundant DHCP agents for configured networks.
+#   Defaults to 1
 #
 # [*allow_bulk*]
 #   (optional) Enable bulk crud operations
@@ -120,7 +125,7 @@ class neutron (
   $auth_strategy               = 'keystone',
   $base_mac                    = 'fa:16:3e:00:00:00',
   $mac_generation_retries      = 16,
-  $dhcp_lease_duration         = 120,
+  $dhcp_lease_duration         = 86400,
   $allow_bulk                  = true,
   $allow_overlapping_ips       = false,
   $root_helper                 = 'sudo neutron-rootwrap /etc/neutron/rootwrap.conf',
@@ -188,6 +193,25 @@ class neutron (
     'DEFAULT/control_exchange':       value => $control_exchange;
     'DEFAULT/rpc_backend':            value => $rpc_backend;
     'AGENT/root_helper':              value => $root_helper;
+  }
+
+  if $log_file {
+    neutron_config {
+      'DEFAULT/log_file': value  => $log_file;
+      'DEFAULT/log_dir':  ensure => absent;
+    }
+  } else {
+    if $log_dir {
+      neutron_config {
+        'DEFAULT/log_dir':  value  => $log_dir;
+        'DEFAULT/log_file': ensure => absent;
+      }
+    } else {
+      neutron_config {
+        'DEFAULT/log_dir':  ensure => absent;
+        'DEFAULT/log_file': ensure => absent;
+      }
+    }
   }
 
   if $service_plugins {
