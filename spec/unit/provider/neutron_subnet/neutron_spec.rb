@@ -42,6 +42,13 @@ describe provider_class do
       provider.gateway_ip=('10.0.0.2')
     end
 
+    it 'should call subnet-update to remove gateway_ip with empty string' do
+      provider.expects(:auth_neutron).with('subnet-update',
+                                           '--no-gateway',
+                                           subnet_name)
+      provider.gateway_ip=('')
+    end
+
     it 'should call subnet-update to change enable_dhcp' do
       provider.expects(:auth_neutron).with('subnet-update',
                                            '--enable-dhcp=True',
@@ -66,6 +73,14 @@ describe provider_class do
                                             'list=true',
                                             'destination=12.0.0.0/24,nexthop=10.0.0.2'])
       provider.host_routes=(['destination=12.0.0.0/24,nexthop=10.0.0.2'])
+    end
+
+    it 'should not update if dns_nameservers are empty' do
+      provider.dns_nameservers=('')
+    end
+
+    it 'should not update if host_routes are empty' do
+      provider.host_routes=('')
     end
   end
 
